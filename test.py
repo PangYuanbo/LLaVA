@@ -1,20 +1,12 @@
 import locale
 locale.getpreferredencoding = lambda: "UTF-8"
-import numpy as np
-
-print(np.__version__)
-print(dir(np))  # 查看 numpy 模块中有哪些属性
-
 from transformers import AutoTokenizer, BitsAndBytesConfig
 from llava.model import LlavaLlamaForCausalLM
 import torch
 
 model_path = "liuhaotian/llava-v1.6-mistral-7b"
-# model_path = "4bit/llava-v1.5-13b-4GB-8bit"
-# model = LlavaLlamaForCausalLM.from_pretrained(model_path)
-# model = LlavaLlamaForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, load_in_8bit=True, device_map="auto")
 
-kwargs = {"device_map": "auto"}
+kwargs = {"device_map": {"": "cpu"}}
 kwargs['load_in_4bit'] = True
 kwargs['quantization_config'] = BitsAndBytesConfig(
     load_in_4bit=True,
@@ -22,6 +14,7 @@ kwargs['quantization_config'] = BitsAndBytesConfig(
     bnb_4bit_use_double_quant=True,
     bnb_4bit_quant_type='nf4'
 )
+
 model = LlavaLlamaForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
 tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
 vision_tower = model.get_vision_tower()
@@ -51,6 +44,7 @@ roles = conv.roles
 from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from llava.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
 from transformers import TextStreamer
+
 def generate(img_url, inp):
     disable_torch_init()
     conv_mode = "llava_v0"
@@ -58,7 +52,7 @@ def generate(img_url, inp):
     roles = conv.roles
 
     image = load_image(img_url)
-    image_tensor = image_processor.preprocess(image, return_tensors='pt')['pixel_values'].half().cuda()
+    image_tensor = image_processor.preprocess(image, return_tensors='pt')['pixel_values'].float()
 
     print(f"{roles[1]}: ", end="")
 
@@ -76,7 +70,7 @@ def generate(img_url, inp):
     conv.append_message(conv.roles[1], None)
     prompt = conv.get_prompt()
 
-    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda()
+    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).float()
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
     keywords = [stop_str]
     stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
@@ -97,4 +91,5 @@ def generate(img_url, inp):
     conv.messages[-1][-1] = outputs
 
     print("\n", {"prompt": prompt, "outputs": outputs}, "\n")
+
 generate("https://llava-vl.github.io/static/images/view.jpg", 'describe the image')
