@@ -35,6 +35,10 @@ async def upload_image(image: ImageUpload):
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
 
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
+
 
 if __name__ == "__main__":
     import uvicorn
