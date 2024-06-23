@@ -6,22 +6,24 @@ import torch
 
 model_path = "liuhaotian/llava-v1.6-mistral-7b"
 
+# 配置在CPU上运行，并避免使用FP4量化
 kwargs = {"device_map": {"": "cpu"}}
-kwargs['load_in_4bit'] = True
+kwargs['load_in_4bit'] = False  # 禁用4bit量化
 kwargs['quantization_config'] = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_compute_dtype=torch.float32,
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_quant_type='nf4'
+    load_in_4bit=False
 )
 
+# 加载模型
 model = LlavaLlamaForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
+model = model.to(torch.device("cpu"))  # 确保模型在CPU上运行
+
 tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
 vision_tower = model.get_vision_tower()
 if not vision_tower.is_loaded:
     vision_tower.load_model()
-vision_tower.to(device='cpu')
+vision_tower.to(device='cpu')  # 确保视觉塔在CPU上运行
 image_processor = vision_tower.image_processor
+
 import requests
 from PIL import Image
 from io import BytesIO
@@ -70,7 +72,7 @@ def generate(img_url, inp):
     conv.append_message(conv.roles[1], None)
     prompt = conv.get_prompt()
 
-    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).float()
+    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(torch.device("cpu"))
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
     keywords = [stop_str]
     stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
@@ -79,7 +81,7 @@ def generate(img_url, inp):
     with torch.inference_mode():
         output_ids = model.generate(
             input_ids,
-            images=image_tensor,
+            images=image_tensor.to(torch.device("cpu")),
             do_sample=True,
             temperature=0.2,
             max_new_tokens=1024,
