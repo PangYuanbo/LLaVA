@@ -6,7 +6,7 @@ import torch
 
 model_path = "liuhaotian/llava-v1.6-mistral-7b"
 
-kwargs = {}
+kwargs = {"device_map": {"": "cpu"}}
 kwargs['load_in_4bit'] = True
 kwargs['quantization_config'] = BitsAndBytesConfig(
     load_in_4bit=True,
@@ -16,15 +16,12 @@ kwargs['quantization_config'] = BitsAndBytesConfig(
 )
 
 model = LlavaLlamaForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
-model = model.to(torch.device("cpu"))  # Move the model to CPU
-
 tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
 vision_tower = model.get_vision_tower()
 if not vision_tower.is_loaded:
     vision_tower.load_model()
-vision_tower.to(device=torch.device('cpu'))  # Move the vision tower to CPU
+vision_tower.to(device='cpu')
 image_processor = vision_tower.image_processor
-
 import requests
 from PIL import Image
 from io import BytesIO
@@ -55,11 +52,12 @@ def generate(img_url, inp):
     roles = conv.roles
 
     image = load_image(img_url)
-    image_tensor = image_processor.preprocess(image, return_tensors='pt')['pixel_values'].half()
+    image_tensor = image_processor.preprocess(image, return_tensors='pt')['pixel_values'].float()
 
     print(f"{roles[1]}: ", end="")
 
     if image is not None:
+        # first message
         if model.config.mm_use_im_start_end:
             inp = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + '\n' + inp
         else:
@@ -67,11 +65,12 @@ def generate(img_url, inp):
         conv.append_message(conv.roles[0], inp)
         image = None
     else:
+        # later messages
         conv.append_message(conv.roles[0], inp)
     conv.append_message(conv.roles[1], None)
     prompt = conv.get_prompt()
 
-    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0)
+    input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).float()
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
     keywords = [stop_str]
     stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
