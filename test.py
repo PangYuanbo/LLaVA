@@ -71,7 +71,6 @@ def generate(img_url, inp):
         conv.append_message(conv.roles[0], inp)
     conv.append_message(conv.roles[1], None)
     prompt = conv.get_prompt()
-
     input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(torch.device("cpu"))
     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
     keywords = [stop_str]
@@ -92,6 +91,6 @@ def generate(img_url, inp):
     outputs = tokenizer.decode(output_ids[0, input_ids.shape[1]:]).strip()
     conv.messages[-1][-1] = outputs
 
-    print("\n", {"prompt": prompt, "outputs": outputs}, "\n")
+    return ("\n", {"prompt": prompt, "outputs": outputs}, "\n")
 
-generate("https://llava-vl.github.io/static/images/view.jpg", 'describe the image')
+
